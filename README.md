@@ -7,17 +7,19 @@ It provides three main modules for exploring forward and inverse kinematics in r
 - Forward Kinematics (Slider-Controlled)
 Adjust the joint angles using sliders to visualize the manipulator's configuration in real-time.
 
-
+![image alt](https://github.com/aAfeworki/RR-Manipulator-Kinematics-Simulators/blob/main/FK_Simulator_for_RR_manipulator_with_Slider.png?raw=true)
 
 - Forward Kinematics (IK-Driven)  
 Use joint angles computed from the inverse kinematics solver to control the manipulator.
 
-
+![image alt](https://github.com/aAfeworki/RR-Manipulator-Kinematics-Simulators/blob/main/FK_Simulator_for_RR_Industrial_Robot.png?raw=true)
 
 - Inverse Kinematics Simulator 
 Enter the equation of a curve on the User Interface to generate joint angles that position the manipulator’s end-effector.
 
+![image alt](https://github.com/aAfeworki/RR-Manipulator-Kinematics-Simulators/blob/main/IK_Generator_for_RR_manipulator_with_Simulator.png?raw=true)
 
+![image alt](https://github.com/aAfeworki/RR-Manipulator-Kinematics-Simulators/blob/main/IK_Generator_for_RR%20manipulator%20with%20Simulator%20User%20Interface.png?raw=true)
 
  📂 Project Structure
 
