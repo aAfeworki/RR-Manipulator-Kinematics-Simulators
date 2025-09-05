@@ -1,0 +1,53 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.widgets import Slider
+
+# ====== Forward Kinematics Function ======
+L1, L2 = 5, 3   # fixed link lengths
+
+def fk(theta1, theta2):
+    x1 = L1 * np.cos(theta1)
+    y1 = L1 * np.sin(theta1)
+    x2 = x1 + L2 * np.cos(theta1 + theta2)
+    y2 = y1 + L2 * np.sin(theta1 + theta2)
+    return (x1, y1), (x2, y2)
+
+# ====== Initial Parameters ======
+theta1_0 = np.pi/4   # initial θ1
+theta2_0 = np.pi/6   # initial θ2
+
+# ====== Plot Setup ======
+fig, ax = plt.subplots()
+plt.subplots_adjust(left=0.1, bottom=0.3)  # extra space for sliders
+ax.set_xlim(-12, 12)
+ax.set_ylim(-12, 12)
+ax.set_aspect("equal")
+ax.set_title("RR Robot - Forward Kinematics Simulation with Sliders")
+
+# Robot line
+line, = ax.plot([], [], 'o-', lw=4, color="blue")
+end_eff_text = ax.text(0.05, 0.95, '', transform=ax.transAxes)
+
+# ====== Initial Plot ======
+def update_plot(theta1, theta2):
+    (x1, y1), (x2, y2) = fk(theta1, theta2)
+    line.set_data([0, x1, x2], [0, y1, y2])
+    end_eff_text.set_text(f"End-Effector: ({x2:.2f}, {y2:.2f})")
+    fig.canvas.draw_idle()
+
+update_plot(theta1_0, theta2_0)
+
+# ====== Sliders ======
+ax_theta1 = plt.axes([0.2, 0.15, 0.65, 0.03])
+ax_theta2 = plt.axes([0.2, 0.1, 0.65, 0.03])
+
+slider_theta1 = Slider(ax_theta1, 'Theta1 (rad)', -np.pi, np.pi, valinit=theta1_0)
+slider_theta2 = Slider(ax_theta2, 'Theta2 (rad)', -np.pi, np.pi, valinit=theta2_0)
+
+def slider_update(val):
+    update_plot(slider_theta1.val, slider_theta2.val)
+
+slider_theta1.on_changed(slider_update)
+slider_theta2.on_changed(slider_update)
+
+plt.show()

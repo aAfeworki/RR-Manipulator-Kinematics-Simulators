@@ -1,0 +1,158 @@
+import numpy as np
+import matplotlib
+matplotlib.use("TkAgg")  # embed matplotlib in Tkinter
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import matplotlib.animation as animation
+import tkinter as tk
+from tkinter import scrolledtext, messagebox
+
+# ====== Robot Parameters ======
+L1, L2 = 5, 3   # fixed link lengths
+
+# ====== Forward Kinematics for RR ======
+def fk(theta1, theta2):
+    x1 = L1 * np.cos(theta1)
+    y1 = L1 * np.sin(theta1)
+    x2 = x1 + L2 * np.cos(theta1 + theta2)
+    y2 = y1 + L2 * np.sin(theta1 + theta2)
+    return (x1, y1), (x2, y2)
+
+# ====== Globals ======
+ani = None
+is_paused = False
+frame_index = 0
+times, theta1s, theta2s = [], [], []
+x_history, y_history = [], []
+
+# ====== Animate function ======
+def animate(i):
+    global frame_index
+
+    if is_paused:
+        return line, trace, end_eff_text
+
+    if frame_index >= len(theta1s):
+        return line, trace, end_eff_text
+
+    th1, th2 = theta1s[frame_index], theta2s[frame_index]
+    (x1, y1), (x2, y2) = fk(th1, th2)
+
+    # update robot links
+    line.set_data([0, x1, x2], [0, y1, y2])
+    x_history.append(x2)
+    y_history.append(y2)
+    trace.set_data(x_history, y_history)
+
+    # update info text
+    end_eff_text.set_text(
+        f"t = {times[frame_index]:.2f}\nθ1 = {th1:.2f} rad\nθ2 = {th2:.2f} rad"
+    )
+
+    # highlight current line in text box
+    text_box.tag_remove("highlight", "1.0", tk.END)
+    line_number = f"{frame_index+1}.0"
+    text_box.tag_add("highlight", line_number, f"{line_number} lineend")
+    text_box.tag_config("highlight", background="yellow", foreground="black")
+    text_box.see(line_number)
+
+    frame_index += 1
+    return line, trace, end_eff_text
+
+# ====== Run Trajectory ======
+def run_trajectory():
+    global ani, times, theta1s, theta2s, x_history, y_history, frame_index, is_paused
+
+    raw_text = text_box.get("1.0", tk.END).strip()
+    if not raw_text:
+        messagebox.showwarning("Warning", "No data pasted!")
+        return
+
+    # Parse data: t, θ1, θ2
+    lines = raw_text.splitlines()
+    times, theta1s, theta2s = [], [], []
+    for line in lines:
+        parts = line.split(",")
+        if len(parts) >= 3:
+            try:
+                t = float(parts[0])
+                th1 = float(parts[1])
+                th2 = float(parts[2])
+                times.append(t)
+                theta1s.append(th1)
+                theta2s.append(th2)
+            except ValueError:
+                continue
+
+    if not theta1s:
+        messagebox.showerror("Error", "Invalid data format!")
+        return
+
+    # Reset state
+    x_history, y_history = [], []
+    frame_index = 0
+    is_paused = False
+    pause_btn.config(text="Pause")
+    text_box.tag_remove("highlight", "1.0", tk.END)
+
+    # Clear old animation
+    if ani:
+        ani.event_source.stop()
+
+    ani = animation.FuncAnimation(
+        fig, animate,
+        frames=len(theta1s),
+        interval=500,
+        blit=True,
+        repeat=True,
+        cache_frame_data=False
+    )
+    canvas.draw()
+
+# ====== Pause/Resume ======
+def toggle_pause():
+    global is_paused
+    is_paused = not is_paused
+    pause_btn.config(text="Resume" if is_paused else "Pause")
+
+# ====== Tkinter GUI ======
+root = tk.Tk()
+root.title("RR Robot - Forward Kinematics Simulator")
+
+# Layout: left text box, right plot
+frame = tk.Frame(root)
+frame.pack(fill="both", expand=True)
+
+# Textbox for trajectory
+text_box = scrolledtext.ScrolledText(frame, width=30, height=20, wrap=tk.WORD)
+text_box.pack(side="left", fill="y", padx=5, pady=5)
+
+# Example trajectory: t, θ1, θ2
+example_text = "0,0.0,0.0\n1,0.5,0.2\n2,1.0,0.5\n3,1.2,-0.3"
+text_box.insert(tk.END, example_text)
+
+# Matplotlib Figure
+fig, ax = plt.subplots(figsize=(5,5))
+ax.set_xlim(-10, 10)
+ax.set_ylim(-10, 10)
+ax.set_aspect("equal")
+ax.set_title("RR Robot - FK Animation")
+
+line, = ax.plot([], [], 'o-', lw=4, color="blue")   # robot links
+trace, = ax.plot([], [], 'r--', lw=1)              # trajectory trace
+end_eff_text = ax.text(0.05, 0.95, '', transform=ax.transAxes, va="top")
+
+canvas = FigureCanvasTkAgg(fig, master=frame)
+canvas.get_tk_widget().pack(side="right", fill="both", expand=True)
+
+# Control buttons
+button_frame = tk.Frame(root)
+button_frame.pack(pady=5)
+
+run_btn = tk.Button(button_frame, text="Run Trajectory", command=run_trajectory)
+run_btn.pack(side="left", padx=5)
+
+pause_btn = tk.Button(button_frame, text="Pause", command=toggle_pause)
+pause_btn.pack(side="left", padx=5)
+
+root.mainloop()

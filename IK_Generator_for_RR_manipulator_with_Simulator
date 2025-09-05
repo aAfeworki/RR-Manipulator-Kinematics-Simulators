@@ -1,0 +1,154 @@
+import numpy as np
+import tkinter as tk
+from tkinter import filedialog, messagebox
+import pandas as pd
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+
+# ====== Robot parameters ======
+L1 = 5.0   # length of first link
+L2 = 3.0   # length of second link
+
+# ====== Inverse Kinematics for RR robot ======
+def ik(x, y):
+    R = np.hypot(x, y)
+    # check reachability
+    if R > (L1 + L2) or R < abs(L1 - L2):
+        raise ValueError("Target point unreachable")
+
+    c2 = (R**2 - L1**2 - L2**2) / (2 * L1 * L2)
+    c2 = np.clip(c2, -1.0, 1.0)   # numerical safety
+    # two possible solutions
+    theta2a = np.arccos(c2)   # elbow-up
+    theta2b = -np.arccos(c2)  # elbow-down
+
+    beta = np.arctan2(y, x)
+
+    def theta1(theta2):
+        phi = np.arctan2(L2 * np.sin(theta2), L1 + L2 * np.cos(theta2))
+        return beta - phi
+
+    return [(theta1(theta2a), theta2a), (theta1(theta2b), theta2b)]
+
+# ====== Run IK and Save Output ======
+def run_ik():
+    try:
+        # Get user input
+        x_expr = x_entry.get()
+        y_expr = y_entry.get()
+        t_end = float(t_entry.get())
+        steps = int(steps_entry.get())
+
+        # Generate time vector
+        t = np.linspace(0, t_end, steps)
+
+        # Evaluate user functions for x(t), y(t)
+        x_vals = [eval(x_expr, {"t": val, "np": np}) for val in t]
+        y_vals = [eval(y_expr, {"t": val, "np": np}) for val in t]
+
+        # Do IK (choose solution based on checkbutton)
+        theta1s, theta2s = [], []
+        for x, y in zip(x_vals, y_vals):
+            sols = ik(x, y)  # [(θ1_up, θ2_up), (θ1_down, θ2_down)]
+            if elbow_var.get() == 0:   # Elbow Up
+                th1, th2 = sols[0]
+            else:                      # Elbow Down
+                th1, th2 = sols[1]
+            theta1s.append(th1)
+            theta2s.append(th2)
+
+        # Save CSV
+        data = {"time": t, "theta1": theta1s, "theta2": theta2s}
+        df = pd.DataFrame(data)
+
+        file_path = filedialog.asksaveasfilename(defaultextension=".csv",
+                                                 filetypes=[("CSV files", "*.csv")])
+        if file_path:
+            df.to_csv(file_path, index=False)
+            messagebox.showinfo("Success", f"File saved as {file_path}")
+
+        # Launch simulator
+        simulate(x_vals, y_vals, theta1s, theta2s)
+
+    except Exception as e:
+        messagebox.showerror("Error", str(e))
+
+# ====== Simulator (Animation) ======
+def simulate(x_vals, y_vals, theta1s, theta2s):
+    fig, ax = plt.subplots()
+    ax.set_xlim(min(x_vals) - 2, max(x_vals) + 2)
+    ax.set_ylim(min(y_vals) - 2, max(y_vals) + 2)
+    ax.set_aspect("equal")
+    ax.set_title("RR Robot Simulator")
+
+    # Robot links
+    line, = ax.plot([], [], 'o-', lw=4, color="blue")
+    trace, = ax.plot([], [], 'r--', lw=1)
+
+    # Info box
+    info_text = ax.text(0.02, 0.95, '', transform=ax.transAxes, fontsize=10,
+                        verticalalignment='top', bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.7))
+
+    x_history, y_history = [], []
+
+    def update(i):
+        th1, th2 = theta1s[i], theta2s[i]
+
+        # Joint positions
+        x1 = L1 * np.cos(th1)
+        y1 = L1 * np.sin(th1)
+        x2 = x1 + L2 * np.cos(th1 + th2)
+        y2 = y1 + L2 * np.sin(th1 + th2)
+
+        # Robot structure: base -> joint -> end-effector
+        line.set_data([0, x1, x2], [0, y1, y2])
+
+        # Trace path
+        x_history.append(x2)
+        y_history.append(y2)
+        trace.set_data(x_history, y_history)
+
+        # Update info box
+        info_text.set_text(f"Step: {i+1}\nθ1 = {th1:.3f} rad\nθ2 = {th2:.3f} rad")
+
+        return line, trace, info_text
+
+    ani = animation.FuncAnimation(fig, update, frames=len(x_vals),
+                                  interval=100, blit=False, repeat=False)
+
+    plt.show()
+
+# ====== GUI Setup ======
+root = tk.Tk()
+root.title("RR Robot - IK Generator & Simulator")
+
+tk.Label(root, text="x(t) function:").grid(row=0, column=0, sticky="w")
+x_entry = tk.Entry(root, width=40)
+x_entry.insert(0, "6*np.cos(t) + 2*np.cos(6*t)")  # default example
+x_entry.grid(row=0, column=1)
+
+tk.Label(root, text="y(t) function:").grid(row=1, column=0, sticky="w")
+y_entry = tk.Entry(root, width=40)
+y_entry.insert(0, "6*np.sin(t) - 2*np.sin(6*t)")  # default example
+y_entry.grid(row=1, column=1)
+
+tk.Label(root, text="Simulation time (t_end):").grid(row=2, column=0, sticky="w")
+t_entry = tk.Entry(root, width=20)
+t_entry.insert(0, "6.28")  # 2π
+t_entry.grid(row=2, column=1, sticky="w")
+
+tk.Label(root, text="Steps:").grid(row=3, column=0, sticky="w")
+steps_entry = tk.Entry(root, width=20)
+steps_entry.insert(0, "200")
+steps_entry.grid(row=3, column=1, sticky="w")
+
+# Checkbox for elbow-up/down selection
+elbow_var = tk.IntVar(value=0)   # 0 = Elbow Up, 1 = Elbow Down
+elbow_check = tk.Checkbutton(root, text="Elbow Down Solution", variable=elbow_var)
+elbow_check.grid(row=4, column=0, columnspan=2, pady=5)
+
+# Run button
+run_button = tk.Button(root, text="Generate IK + Simulate", command=run_ik)
+run_button.grid(row=5, column=0, columnspan=2, pady=10)
+
+root.mainloop()
